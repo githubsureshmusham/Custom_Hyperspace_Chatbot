@@ -319,20 +319,51 @@ function autoGrow() {
 
 // ---- Models ----
 async function loadModels() {
+  // Show a loading placeholder while we fetch the live list from the proxy.
+  modelSelect.innerHTML = "";
+  const loadingOpt = document.createElement("option");
+  loadingOpt.textContent = "Loading models…";
+  loadingOpt.disabled = true;
+  modelSelect.appendChild(loadingOpt);
+  modelSelect.disabled = true;
+
   try {
     const res = await fetch(`${API}/models`);
     const data = await res.json();
+
     modelSelect.innerHTML = "";
+    const availableIds = [];
     for (const m of data.models) {
       const opt = document.createElement("option");
       opt.value = m.id;
       opt.textContent = m.name;
       modelSelect.appendChild(opt);
+      availableIds.push(m.id);
     }
-    state.model = state.model || data.default;
+
+    // Keep the user's previously selected model if it's still offered by the
+    // proxy; otherwise fall back to the server-provided default.
+    if (!state.model || !availableIds.includes(state.model)) {
+      state.model = data.default;
+    }
     modelSelect.value = state.model;
+    modelSelect.disabled = false;
+    saveState();
+
+    // Surface where the list came from (helps diagnose proxy issues).
+    const count = availableIds.length;
+    modelSelect.title =
+      data.source === "proxy"
+        ? `${count} model(s) from proxy`
+        : `${count} model(s) (proxy unavailable — using configured fallback list)`;
   } catch (e) {
     console.warn("Failed to load models", e);
+    modelSelect.innerHTML = "";
+    const opt = document.createElement("option");
+    opt.textContent = "⚠️ Could not load models";
+    opt.disabled = true;
+    modelSelect.appendChild(opt);
+    modelSelect.disabled = false;
   }
 }
 
@@ -396,6 +427,9 @@ function init() {
     state.model = modelSelect.value;
     saveState();
   };
+
+  // Refresh model list from the proxy on demand
+  $("refreshModelsBtn").onclick = () => loadModels();
 
   // Sidebar toggle (mobile)
   $("hamburger").onclick = () => $("sidebar").classList.toggle("collapsed");

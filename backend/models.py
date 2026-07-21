@@ -30,3 +30,4 @@ class ModelInfo(BaseModel):
 class ModelsResponse(BaseModel):
     default: str
     models: list[ModelInfo]
+    source: str = "proxy"  # "proxy" if fetched live, "env-fallback" otherwise

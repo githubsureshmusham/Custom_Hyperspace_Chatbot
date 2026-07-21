@@ -6,6 +6,7 @@ The LiteLLM proxy exposes an OpenAI-compatible API, so we point the
 import json
 from typing import AsyncGenerator
 
+import httpx
 import litellm
 from litellm import acompletion
 
@@ -101,3 +102,50 @@ async def complete_chat(
     kwargs = _build_kwargs(model, messages, temperature, max_tokens, stream=False)
     response = await _acompletion_with_retry(kwargs)
     return response.choices[0].message.content or ""
+
+
+async def fetch_models() -> list[str]:
+    """Retrieve the live list of model IDs from the LiteLLM / Hyperspace proxy.
+
+    LiteLLM proxies are OpenAI-compatible and expose `GET {base}/models`, which
+    returns `{"data": [{"id": "gpt-4o", ...}, ...]}`. We try the configured base
+    URL as-is first, and also a "/v1"-adjusted variant, to be robust to how the
+    proxy path is set up.
+    """
+    base = settings.LITELLM_PROXY_URL.rstrip("/")
+    headers = {}
+    if settings.LITELLM_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.LITELLM_API_KEY}"
+
+    # Candidate endpoints to try (dedup while preserving order).
+    candidates: list[str] = []
+    for url in (f"{base}/models", f"{base}/v1/models"):
+        if url not in candidates:
+            candidates.append(url)
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        last_error: Exception | None = None
+        for url in candidates:
+            try:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                payload = resp.json()
+                data = payload.get("data", payload) if isinstance(payload, dict) else payload
+                ids: list[str] = []
+                for item in data or []:
+                    if isinstance(item, dict):
+                        mid = item.get("id") or item.get("model_name") or item.get("name")
+                    else:
+                        mid = str(item)
+                    if mid and mid not in ids:
+                        ids.append(mid)
+                if ids:
+                    return sorted(ids, key=str.lower)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                continue
+
+    # If the proxy didn't return anything usable, raise so the caller can fall back.
+    raise RuntimeError(
+        f"Could not fetch models from proxy ({', '.join(candidates)}): {last_error}"
+    )

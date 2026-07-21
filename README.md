@@ -9,7 +9,6 @@ A full-stack, self-hosted AI chatbot with a modern ChatGPT/Gemini-style UI, powe
 - 🎨 **Modern chat UI** — dark theme, streaming responses with a typing cursor, Markdown + code rendering
 - ⚡ **Real-time streaming** via Server-Sent Events (SSE)
 - 💬 **Multi-conversation** management with sidebar, persisted in `localStorage`
-- 🔀 **Model selector** — switch between any models exposed by your proxy
 - ⚙️ **Settings** — custom system prompt, temperature, max tokens
 - 🔌 **LiteLLM Hyperspace proxy integration** — one API for many providers
 - 🛑 **Stop generation** mid-stream
@@ -155,10 +154,14 @@ The backend exposes a small REST API (auto-docs at `http://localhost:8000/docs`)
 Returns `{ "status": "ok", "proxy": "<proxy url>" }`.
 
 ### `GET /api/models`
+Fetches the **live model list** from the proxy's OpenAI-compatible `/models`
+endpoint. If the proxy is unreachable, it falls back to the `AVAILABLE_MODELS`
+env list (`source` tells you which).
 ```json
 {
   "default": "gpt-4o",
-  "models": [{ "id": "gpt-4o", "name": "gpt-4o" }, ...]
+  "models": [{ "id": "gpt-4o", "name": "gpt-4o" }, ...],
+  "source": "proxy"           // or "env-fallback"
 }
 ```
 

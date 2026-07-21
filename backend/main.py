@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from models import ChatRequest, ChatResponse, ModelInfo, ModelsResponse
-from llm_service import stream_chat, complete_chat
+from llm_service import stream_chat, complete_chat, fetch_models
 
 app = FastAPI(title="Custom AI Chatbot", version="1.0.0")
 
@@ -40,8 +40,33 @@ async def health():
 
 @app.get("/api/models", response_model=ModelsResponse)
 async def list_models():
-    models = [ModelInfo(id=m, name=m) for m in settings.AVAILABLE_MODELS]
-    return ModelsResponse(default=settings.DEFAULT_MODEL, models=models)
+    """Return the live list of models from the proxy.
+
+    Tries the proxy's OpenAI-compatible `/models` endpoint first; if that fails
+    (proxy unreachable, auth issue, etc.) it falls back to the AVAILABLE_MODELS
+    configured in the environment.
+    """
+    source = "proxy"
+    try:
+        model_ids = await fetch_models()
+    except Exception:  # noqa: BLE001
+        model_ids = settings.AVAILABLE_MODELS
+        source = "env-fallback"
+
+    if not model_ids:
+        model_ids = settings.AVAILABLE_MODELS
+        source = "env-fallback"
+
+    # Pick a sensible default: configured default if present in the list,
+    # otherwise the first available model.
+    default = (
+        settings.DEFAULT_MODEL
+        if settings.DEFAULT_MODEL in model_ids
+        else (model_ids[0] if model_ids else settings.DEFAULT_MODEL)
+    )
+
+    models = [ModelInfo(id=m, name=m) for m in model_ids]
+    return ModelsResponse(default=default, models=models, source=source)
 
 
 @app.post("/api/chat")
