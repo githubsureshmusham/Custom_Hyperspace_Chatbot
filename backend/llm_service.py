@@ -4,9 +4,17 @@ The LiteLLM proxy exposes an OpenAI-compatible API, so we point the
 `litellm` SDK at the proxy's base URL and use the issued virtual key.
 """
 import json
+import logging
+import os
 from typing import AsyncGenerator
 
 import httpx
+
+# Quiet down litellm's noisy import-time warnings/telemetry before importing it.
+os.environ.setdefault("LITELLM_LOG", "ERROR")
+os.environ.setdefault("LITELLM_TELEMETRY", "False")
+logging.getLogger("litellm").setLevel(logging.ERROR)
+
 import litellm
 from litellm import acompletion
 
@@ -16,6 +24,11 @@ from config import settings
 # we set a custom api_base and api_key. `custom_llm_provider="openai"` forces
 # litellm to use the OpenAI transport against the proxy URL.
 litellm.drop_params = True  # silently drop params a given model doesn't support
+litellm.suppress_debug_info = True
+try:
+    litellm.telemetry = False
+except Exception:  # noqa: BLE001
+    pass
 
 
 # Substrings that indicate a parameter isn't supported by the target model.

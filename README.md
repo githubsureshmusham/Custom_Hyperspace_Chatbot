@@ -218,6 +218,18 @@ Supported: PDF, DOCX, XLSX, CSV/TSV, and text/code files (`.txt .md .json .py .j
 - **File uploads / RAG**: add an endpoint that embeds documents and injects context before calling the proxy.
 - **Usage/analytics**: LiteLLM proxy already logs spend & tokens per key.
 
+## 🛟 Troubleshooting
+
+- **`RuntimeError: Form data requires "python-multipart" to be installed`** — the file-upload endpoint needs it. Run:
+  ```
+  cd backend
+  python -m pip install -r requirements.txt
+  ```
+  (or `python -m pip install python-multipart pypdf python-docx openpyxl`)
+- **App "not working" at `http://0.0.0.0:8000`** — `0.0.0.0` is a bind address, not browsable. Open **http://localhost:8000** instead.
+- **`temperature is deprecated for this model`** — handled automatically; the backend retries without unsupported params. Leave temperature unchecked in Settings to always use the model default.
+- Always install into the **same Python** you run `main.py` with (a venv is recommended to avoid mixing environments).
+
 ## 📜 License
 
 MIT — do whatever you like.

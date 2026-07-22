@@ -48,7 +48,10 @@ def _truncate(text: str) -> str:
 
 
 def _extract_pdf(data: bytes) -> str:
-    from pypdf import PdfReader
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return "[Cannot read PDF: 'pypdf' is not installed. Run: pip install pypdf]"
 
     reader = PdfReader(io.BytesIO(data))
     parts = []
@@ -63,7 +66,10 @@ def _extract_pdf(data: bytes) -> str:
 
 
 def _extract_docx(data: bytes) -> str:
-    import docx  # python-docx
+    try:
+        import docx  # python-docx
+    except ImportError:
+        return "[Cannot read DOCX: 'python-docx' is not installed. Run: pip install python-docx]"
 
     document = docx.Document(io.BytesIO(data))
     lines = [p.text for p in document.paragraphs if p.text.strip()]
@@ -77,7 +83,10 @@ def _extract_docx(data: bytes) -> str:
 
 
 def _extract_xlsx(data: bytes) -> str:
-    from openpyxl import load_workbook
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        return "[Cannot read XLSX: 'openpyxl' is not installed. Run: pip install openpyxl]"
 
     wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     parts = []
