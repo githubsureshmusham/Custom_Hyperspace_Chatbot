@@ -17,3 +17,8 @@ backend/.env
 
 # Logs
 *.log
+
+# Test artifacts
+testfile.txt
+backend/testfile.txt
+backend/server.log
