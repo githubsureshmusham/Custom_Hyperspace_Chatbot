@@ -17,7 +17,10 @@ let state = {
   },
   streaming: false,
   abortCtrl: null,
+  pendingAttachments: [], // files attached to the next message
 };
+
+const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 // ---- DOM ----
 const $ = (id) => document.getElementById(id);
@@ -27,6 +30,9 @@ const sendBtn = $("sendBtn");
 const stopBtn = $("stopBtn");
 const chatListEl = $("chatList");
 const modelSelect = $("modelSelect");
+const fileInput = $("fileInput");
+const attachBtn = $("attachBtn");
+const attachmentsEl = $("attachments");
 
 // ---- Persistence ----
 const STORAGE_KEY = "nova_ai_state_v1";
@@ -145,7 +151,7 @@ function renderMessages() {
   }
 
   for (const msg of chat.messages) {
-    appendMessageRow(msg.role, msg.content);
+    appendMessageRow(msg.role, msg.content, msg.attachments);
   }
   scrollToBottom();
 }
@@ -171,7 +177,33 @@ function renderWelcome() {
   });
 }
 
-function appendMessageRow(role, content) {
+function attachmentChipsHtml(attachments) {
+  if (!attachments || !attachments.length) return "";
+  const chips = attachments
+    .map((att) => {
+      const thumb =
+        att.type === "image" && att.data_url
+          ? `<img class="thumb" src="${att.data_url}" alt="" />`
+          : `<span class="ic">${iconFor(att)}</span>`;
+      const sub =
+        att.type === "unsupported"
+          ? escapeHtml(att.reason || "Unsupported")
+          : att.size
+          ? fmtSize(att.size)
+          : att.type;
+      return `<div class="attach-chip ${att.type === "unsupported" ? "error" : ""}">
+        ${thumb}
+        <div class="meta">
+          <div class="name">${escapeHtml(att.filename || "file")}</div>
+          <div class="sub">${sub}</div>
+        </div>
+      </div>`;
+    })
+    .join("");
+  return `<div class="msg-attachments">${chips}</div>`;
+}
+
+function appendMessageRow(role, content, attachments) {
   const row = document.createElement("div");
   row.className = `msg-row ${role}`;
   const avatarLabel = role === "user" ? "U" : "✦";
@@ -181,10 +213,15 @@ function appendMessageRow(role, content) {
       <div class="msg-content"></div>
     </div>`;
   const contentEl = row.querySelector(".msg-content");
+
+  const chipsHtml = role === "user" ? attachmentChipsHtml(attachments) : "";
+
   if (role === "assistant") {
     contentEl.innerHTML = renderMarkdown(content);
   } else {
-    contentEl.textContent = content;
+    // Render attachment chips (safe HTML) + escaped text.
+    const textHtml = content ? `<div>${escapeHtml(content)}</div>` : "";
+    contentEl.innerHTML = chipsHtml + textHtml;
   }
   messagesEl.appendChild(row);
   return contentEl;
@@ -193,7 +230,17 @@ function appendMessageRow(role, content) {
 // ---- Sending / streaming ----
 async function sendMessage() {
   const text = inputEl.value.trim();
-  if (!text || state.streaming) return;
+
+  // Only send finished (non-loading) attachments.
+  const ready = state.pendingAttachments.filter((a) => !a.loading);
+  const stillLoading = state.pendingAttachments.some((a) => a.loading);
+  if (stillLoading) {
+    // Wait for uploads to finish before sending.
+    return;
+  }
+
+  // Need either text or at least one attachment.
+  if ((!text && ready.length === 0) || state.streaming) return;
 
   let chat = currentChat();
   if (!chat) {
@@ -204,13 +251,20 @@ async function sendMessage() {
   // Clear welcome
   if (chat.messages.length === 0) messagesEl.innerHTML = "";
 
-  // Add user message
-  chat.messages.push({ role: "user", content: text });
-  appendMessageRow("user", text);
+  // Build the user message (with attachments if any)
+  const userMsg = { role: "user", content: text };
+  if (ready.length) userMsg.attachments = ready;
+  chat.messages.push(userMsg);
+  appendMessageRow("user", text, ready);
+
+  // Clear pending attachments now that they're attached to the message.
+  state.pendingAttachments = [];
+  renderPendingAttachments();
 
   // Title from first message
   if (chat.messages.filter((m) => m.role === "user").length === 1) {
-    chat.title = text.slice(0, 40) + (text.length > 40 ? "…" : "");
+    const t = text || (ready[0] && ready[0].filename) || "New chat";
+    chat.title = t.slice(0, 40) + (t.length > 40 ? "…" : "");
     renderChatList();
   }
 
@@ -367,6 +421,107 @@ async function loadModels() {
   }
 }
 
+// ---- Attachments ----
+function fmtSize(bytes) {
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return bytes + " B";
+}
+
+function iconFor(att) {
+  if (att.type === "image") return "🖼️";
+  if (att.type === "unsupported") return "⚠️";
+  const n = (att.filename || "").toLowerCase();
+  if (n.endsWith(".pdf")) return "📕";
+  if (n.endsWith(".docx")) return "📘";
+  if (n.endsWith(".xlsx") || n.endsWith(".csv")) return "📊";
+  return "📄";
+}
+
+function renderPendingAttachments() {
+  attachmentsEl.innerHTML = "";
+  if (state.pendingAttachments.length === 0) {
+    attachmentsEl.classList.add("hidden");
+    return;
+  }
+  attachmentsEl.classList.remove("hidden");
+  state.pendingAttachments.forEach((att, idx) => {
+    const chip = document.createElement("div");
+    chip.className =
+      "attach-chip" +
+      (att.type === "unsupported" ? " error" : "") +
+      (att.loading ? " loading" : "");
+    const sub = att.loading
+      ? "Reading…"
+      : att.type === "unsupported"
+      ? att.reason || "Unsupported"
+      : fmtSize(att.size || 0);
+    const thumb =
+      att.type === "image" && att.data_url
+        ? `<img class="thumb" src="${att.data_url}" alt="" />`
+        : `<span class="ic">${iconFor(att)}</span>`;
+    chip.innerHTML = `
+      ${thumb}
+      <div class="meta">
+        <div class="name">${escapeHtml(att.filename)}</div>
+        <div class="sub">${escapeHtml(sub)}</div>
+      </div>
+      <button class="rm" title="Remove">✕</button>`;
+    chip.querySelector(".rm").onclick = () => {
+      state.pendingAttachments.splice(idx, 1);
+      renderPendingAttachments();
+    };
+    attachmentsEl.appendChild(chip);
+  });
+}
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList || []);
+  for (const file of files) {
+    if (file.size > MAX_FILE_BYTES) {
+      state.pendingAttachments.push({
+        type: "unsupported",
+        filename: file.name,
+        reason: `Too large (${fmtSize(file.size)} > 100 MB)`,
+      });
+      renderPendingAttachments();
+      continue;
+    }
+
+    // Placeholder while uploading
+    const placeholder = { type: "text", filename: file.name, loading: true, size: file.size };
+    state.pendingAttachments.push(placeholder);
+    renderPendingAttachments();
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API}/upload`, { method: "POST", body: fd });
+      if (!res.ok) {
+        let detail = `Upload failed (${res.status})`;
+        try {
+          const j = await res.json();
+          detail = j.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      const result = await res.json();
+      const i = state.pendingAttachments.indexOf(placeholder);
+      if (i !== -1) state.pendingAttachments[i] = result;
+    } catch (err) {
+      const i = state.pendingAttachments.indexOf(placeholder);
+      const errAtt = {
+        type: "unsupported",
+        filename: file.name,
+        reason: err.message,
+      };
+      if (i !== -1) state.pendingAttachments[i] = errAtt;
+      else state.pendingAttachments.push(errAtt);
+    }
+    renderPendingAttachments();
+  }
+}
+
 // ---- Settings ----
 function openSettings() {
   $("systemPrompt").value = state.settings.systemPrompt || "";
@@ -430,6 +585,31 @@ function init() {
 
   // Refresh model list from the proxy on demand
   $("refreshModelsBtn").onclick = () => loadModels();
+
+  // Attachments: click 📎 to open the picker; handle chosen files.
+  attachBtn.onclick = () => fileInput.click();
+  fileInput.addEventListener("change", (e) => {
+    handleFiles(e.target.files);
+    fileInput.value = ""; // allow re-selecting the same file
+  });
+
+  // Drag & drop files onto the composer
+  const composerInner = document.querySelector(".composer-inner");
+  ["dragover", "dragenter"].forEach((ev) =>
+    composerInner.addEventListener(ev, (e) => {
+      e.preventDefault();
+      composerInner.style.opacity = "0.85";
+    })
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    composerInner.addEventListener(ev, (e) => {
+      e.preventDefault();
+      composerInner.style.opacity = "1";
+    })
+  );
+  composerInner.addEventListener("drop", (e) => {
+    if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+  });
 
   // Sidebar toggle (mobile)
   $("hamburger").onclick = () => $("sidebar").classList.toggle("collapsed");

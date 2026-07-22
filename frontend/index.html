@@ -55,7 +55,10 @@
       </section>
 
       <footer class="composer">
+        <div id="attachments" class="attachments hidden"></div>
         <div class="composer-inner">
+          <input type="file" id="fileInput" multiple class="hidden" />
+          <button id="attachBtn" class="attach-btn" title="Attach files (up to 100MB each)">📎</button>
           <textarea id="input" class="input" placeholder="Message Nova AI…" rows="1"></textarea>
           <button id="sendBtn" class="send-btn" title="Send">➤</button>
           <button id="stopBtn" class="stop-btn hidden" title="Stop">■</button>

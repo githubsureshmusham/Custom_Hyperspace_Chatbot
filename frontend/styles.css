@@ -282,6 +282,63 @@ body {
   margin-top: 10px;
 }
 
+.attach-btn {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.attach-btn:hover { border-color: var(--accent); }
+.attach-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Attachments preview ---------- */
+.attachments {
+  max-width: 760px;
+  margin: 0 auto 8px;
+  padding: 0 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  max-width: 260px;
+}
+.attach-chip .ic { font-size: 15px; flex-shrink: 0; }
+.attach-chip .meta { min-width: 0; }
+.attach-chip .name {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500;
+}
+.attach-chip .sub { color: var(--text-dim); font-size: 11px; }
+.attach-chip.error { border-color: var(--danger); }
+.attach-chip.loading .sub { color: var(--accent); }
+.attach-chip .rm {
+  border: none; background: transparent; color: var(--text-dim);
+  cursor: pointer; font-size: 14px; flex-shrink: 0;
+}
+.attach-chip .rm:hover { color: var(--danger); }
+.attach-chip img.thumb {
+  width: 34px; height: 34px; border-radius: 6px; object-fit: cover; flex-shrink: 0;
+}
+
+/* Attachment chips shown inside a sent message */
+.msg-attachments {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+}
+.msg-attachments .attach-chip { background: rgba(255,255,255,0.04); }
+
 /* ---------- Modal ---------- */
 .modal-overlay {
   position: fixed;

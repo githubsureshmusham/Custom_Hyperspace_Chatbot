@@ -31,5 +31,12 @@ class Settings:
         "You are a helpful, knowledgeable AI assistant. Answer clearly and concisely.",
     )
 
+    # Max upload size per file, in megabytes.
+    MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "100"))
+
+    @property
+    def MAX_UPLOAD_BYTES(self) -> int:
+        return self.MAX_UPLOAD_MB * 1024 * 1024
+
 
 settings = Settings()

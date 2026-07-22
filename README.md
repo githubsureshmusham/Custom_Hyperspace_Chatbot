@@ -7,8 +7,8 @@ A full-stack, self-hosted AI chatbot with a modern ChatGPT/Gemini-style UI, powe
 ## ✨ Features
 
 - 🎨 **Modern chat UI** — dark theme, streaming responses with a typing cursor, Markdown + code rendering
+- 📎 **File attachments (up to 100 MB)** — attach PDF, DOCX, XLSX, CSV, code/text files, and images (drag & drop supported). The backend extracts the content so the model can read and answer about it; images are sent to vision-capable models.
 - ⚡ **Real-time streaming** via Server-Sent Events (SSE)
-- 💬 **Multi-conversation** management with sidebar, persisted in `localStorage`
 - ⚙️ **Settings** — custom system prompt, temperature, max tokens
 - 🔌 **LiteLLM Hyperspace proxy integration** — one API for many providers
 - 🛑 **Stop generation** mid-stream
@@ -182,6 +182,19 @@ Request body:
   `data: {"token": "..."}`, ending with `data: {"done": true}`. Errors come as
   `data: {"error": "..."}`.
 - When `stream: false` → responds with `{ "content": "...", "model": "..." }`.
+- Messages may include an `attachments` array (see `/api/upload`). Text
+  attachments are folded into the prompt; image attachments are sent as
+  `image_url` parts for vision models.
+
+### `POST /api/upload`
+Multipart form upload (`file`), max **100 MB** (configurable via `MAX_UPLOAD_MB`).
+Extracts readable content so the model can use it. Returns one of:
+```json
+{ "type": "text",  "filename": "notes.pdf", "content": "…extracted text…", "size": 12345 }
+{ "type": "image", "filename": "chart.png", "data_url": "data:image/png;base64,…", "size": 6789 }
+{ "type": "unsupported", "filename": "app.bin", "reason": "Binary or unsupported file type." }
+```
+Supported: PDF, DOCX, XLSX, CSV/TSV, and text/code files (`.txt .md .json .py .js …`); images (`.png .jpg .jpeg .gif .webp .bmp`) for vision-capable models.
 
 ## 🛠️ Tech stack
 
